@@ -1,4 +1,3 @@
-require 'yaml'
 require 'set'
 require 'open3'
 require 'colorize'
@@ -44,14 +43,14 @@ class Pipa
 
 	def log_info(msg)
 		puts
-		puts "------- [#{Time.now}] -------".green
+		puts "-------- [#{Time.now.utc}] --------".green
 		puts msg.green
 		puts "-------------------------------------------".green
 	end
 
 	def log_error(msg)
 		puts
-		puts "------- [#{Time.now}] -------".red
+		puts "-------- [#{Time.now.utc}] --------".red
 		puts msg.red
 		puts "-------------------------------------------".red
 	end
@@ -126,9 +125,3 @@ class Pipa
 		end
 	end
 end
-
-config = YAML.load(IO.read(ARGV[0]))
-
-pipa = Pipa.new(config["stages"])
-pipa.execute
-pipa.wait

@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+
+require 'pipa'
+require 'yaml'
+
+config = YAML.load(IO.read(ARGV[0]))
+
+pipa = Pipa.new(config["stages"])
+pipa.execute
+pipa.wait
