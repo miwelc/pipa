@@ -1,15 +1,19 @@
 require 'yaml'
 require 'set'
 require 'open3'
+require 'colorize'
 
 class Pipa
 	def initialize(stages)
 		@stages = stages
 		@to_be_executed = Set.new( stages.map{|k,v| k} )
 		@executed = Set.new
+		@log = {}
+		@ret = {}
 
 		@stages.each do |name, attributes|
-			attributes["dependencies_set"] = Set.new(attributes["dependencies"] || [])
+			attributes["dependencies"] ||= []
+			attributes["dependencies_set"] = Set.new(attributes["dependencies"])
 		end
 
 		@threads = []
@@ -30,10 +34,27 @@ class Pipa
 
 	def wait
 		@threads.map(&:join)
+		unless @to_be_executed.empty?
+			log_error "Some stages couldn't be executed: #{@to_be_executed.to_a}"
+		end
 		@success
 	end
 
 	private
+
+	def log_info(msg)
+		puts
+		puts "------- [#{Time.now}] -------".green
+		puts msg.green
+		puts "-------------------------------------------".green
+	end
+
+	def log_error(msg)
+		puts
+		puts "------- [#{Time.now}] -------".red
+		puts msg.red
+		puts "-------------------------------------------".red
+	end
 
 	def resolved_dependencies?(stage)
 		@stages[stage]["dependencies_set"].subset?(@executed)
@@ -43,29 +64,65 @@ class Pipa
 		@threads << Thread.new do
 			t = Time.now
 
-			mode = ["bash","ruby","node"].find {|m| !@stages[stage][m].nil?}
+			reader, writer = IO.pipe
 
-			cmd = ["bash", "-e", "-c", "#{@stages[stage][mode]}"] if mode == "bash"
-			cmd = ["ruby", "-e", "#{@stages[stage][mode]};main()"] if mode == "ruby"
-			cmd = ["node", "-e", "#{@stages[stage][mode]};main()"] if mode == "node"
+			mode = ["bash","ruby","node","http"].find {|m| !@stages[stage][m].nil?}
+			input = @stages[stage]["dependencies"].map{|d| "___deserialize(#{@ret[d].dump})"}.join(',')
 
-			Open3.popen2e(*cmd) do |stdin, stdout_err, wait_thr|
+			cmd = case mode
+				when "bash"
+					["bash", "-e", "-c", "bash -e -c '#{@stages[stage][mode]}' | ruby -e \"require 'json'; print ARGF.read.to_json\" | tee >(cat >&3)"]
+				when "ruby"
+					["ruby", "-e", %Q(
+						require 'json'
+						#{@stages[stage][mode]};
+						___deserialize = JSON.instance_method(:parse)
+						___ret = main(#{input});
+						___ret_fd = IO.open(3, 'w')
+						___ret_fd.write(___ret.to_json);
+						___ret_fd.close
+					)]
+				when "node"
+					["node", "-e", %Q(
+						___deserialize = JSON.parse
+						#{@stages[stage][mode]};
+						const ___ret = main(#{input});
+						fs.writeSync(3, JSON.stringify(___ret));
+					)]
+				when "http"
+					["ruby", "-e", %Q(
+						require 'httpclient'
+						require 'json'
+						puts ___ret = HTTPClient.get_content("#{@stages[stage][mode]}")
+						___ret_fd = IO.open(3, 'w')
+						___ret_fd.write(___ret.to_json);
+						___ret_fd.close
+					)]
+			end
+
+			@log[stage] = ""
+			@ret[stage] = ""
+
+			Open3.popen2e(*cmd, 3 => writer.fileno) do |stdin, stdout_err, wait_thr|
 				while line = stdout_err.gets
 					puts line
+					@log[stage] << line
 				end
 
 				exit_status = wait_thr.value
 				if exit_status.success?
+					writer.close
+					@ret[stage] = reader.read
+					reader.close
 					@executed.add(stage)
+					log_info "Stage '#{stage}' took #{Time.now - t}s."
 				else
-					puts "Stage '#{stage}' failed with status #{exit_status.exitstatus}."
+					log_error "Stage '#{stage}' failed with status #{exit_status.exitstatus} after #{Time.now - t}s. Error msg:\n#{@log[stage]}"
 					@success = false
 				end
 
 				execute
 			end
-
-			puts "Stage '#{stage}' took #{Time.now - t}s."
 		end
 	end
 end

@@ -1,25 +1,39 @@
 stages:
-  echo_bullshitter:
-    bash: sleep 2 && echo hola
+  request:
+    http: https://httpbin.org/ip
 
-  b:
+  hola:
+    bash: echo -n hola
+
+  generate_json:
     ruby: |-
       require 'json'
 
       def main
-        j = {
+        {
           a: 1,
           b: "yeah"
-        }.to_json
-        puts j
+        }
       end
 
   exit:
     dependencies:
-      - echo_bullshitter
-      - b
+      - hola
+      - generate_json
+      - request
     node: |-
-      function main() {
-        console.log("dew");
+      function main(msg, j, body) {
+        ip = JSON.parse(body).origin;
+        console.log("dew:", msg, j.b);
+        console.log("My IP is: " + ip);
+        return -1;
       }
 
+# dummies:
+#   a:
+
+# watchers:
+#   pepe:
+#     watch: exit
+#     pre:
+#     post:
