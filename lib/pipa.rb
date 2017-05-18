@@ -70,7 +70,26 @@ class Pipa
 
 			cmd = case mode
 				when "bash"
-					["bash", "-e", "-c", "bash -e -c '#{@stages[stage][mode]}' | ruby -e \"require 'json'; print ARGF.read.to_json\" | tee >(cat >&3)"]
+					["ruby", "-e", %Q(
+						require 'json'
+						require 'open3'
+
+						Open3.popen2e("bash", "-e", "-c", #{@stages[stage][mode].dump}) do |stdin, stdout_err, wait_thr|
+							ret = ""
+							while line = stdout_err.gets
+								print line
+								ret += line
+							end
+
+							exit_status = wait_thr.value
+							if exit_status.success?
+								ret_fd = IO.open(3, 'w')
+								ret_fd.write(ret.to_json);
+								ret_fd.close
+							end
+							exit(exit_status.exitstatus)
+						end
+					)]
 				when "ruby"
 					["ruby", "-e", %Q(
 						require 'json'
