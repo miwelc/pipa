@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = 'pipa'
-  s.version     = '0.1.1'
+  s.version     = '0.2.0'
   s.date        = '2017-05-18'
   s.summary     = "Pipelines, easy"
   s.description = "Define and execute pipelines"
@@ -11,4 +11,6 @@ Gem::Specification.new do |s|
   s.homepage    = 'http://rubygems.org/gems/pipa'
   s.license     = 'MIT'
   s.add_dependency 'colorize', '~> 0.8.1'
+  s.add_dependency 'httpclient', '~> 2.8.3'
+  s.add_dependency 'json', '~> 2.1.0'
 end

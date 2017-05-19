@@ -60,6 +60,8 @@ class Pipa
 	end
 
 	def execute_stage(stage)
+		log_info "Executing #{stage}."
+
 		@threads << Thread.new do
 			t = Time.now
 
@@ -76,8 +78,9 @@ class Pipa
 
 						Open3.popen2e("bash", "-e", "-c", #{@stages[stage][mode].dump}) do |stdin, stdout_err, wait_thr|
 							ret = ""
-							while line = stdout_err.gets
+							while line = stdout_err.readpartial(4096) rescue nil
 								print line
+								$stdout.flush
 								ret += line
 							end
 
@@ -93,9 +96,14 @@ class Pipa
 				when "ruby"
 					["ruby", "-e", %Q(
 						require 'json'
+						def ___deserialize(val)
+							JSON.parse("[\#{val}]")[0]
+						end
 						#{@stages[stage][mode]};
-						___deserialize = JSON.instance_method(:parse)
-						___ret = main(#{input});
+						___n_args = method(:main).arity
+						___input = [#{input}]
+						___input = ___input.take(___n_args) if ___n_args >= 0
+						___ret = main(*___input)
 						___ret_fd = IO.open(3, 'w')
 						___ret_fd.write(___ret.to_json);
 						___ret_fd.close
@@ -122,16 +130,25 @@ class Pipa
 			@ret[stage] = ""
 
 			Open3.popen2e(*cmd, 3 => writer.fileno) do |stdin, stdout_err, wait_thr|
-				while line = stdout_err.gets
-					puts line
+				ret_thread = Thread.new do
+					while line = reader.readpartial(4096) rescue nil
+						@ret[stage] << line
+					end
+					reader.close
+				end
+
+				while line = stdout_err.readpartial(4096) rescue nil
+					print line
 					@log[stage] << line
 				end
 
 				exit_status = wait_thr.value
+
+				writer.close
+				ret_thread.join
+
+				exit_status = wait_thr.value
 				if exit_status.success?
-					writer.close
-					@ret[stage] = reader.read
-					reader.close
 					@executed.add(stage)
 					log_info "Stage '#{stage}' took #{Time.now - t}s."
 				else
