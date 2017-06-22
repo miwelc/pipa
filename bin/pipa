@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require 'pipa'
+require_relative '../lib/pipa'
 require 'yaml'
 
 config = YAML.load(IO.read(ARGV[0]))
