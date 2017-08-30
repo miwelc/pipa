@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = 'pipa'
-  s.version     = '0.2.0'
+  s.version     = '0.2.1'
   s.date        = '2017-05-18'
   s.summary     = "Pipelines, easy"
   s.description = "Define and execute pipelines"

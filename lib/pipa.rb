@@ -87,7 +87,7 @@ class Pipa
 							exit_status = wait_thr.value
 							if exit_status.success?
 								ret_fd = IO.open(3, 'w')
-								ret_fd.write(ret.to_json);
+								ret_fd.write(ret.force_encoding('UTF-8').to_json);
 								ret_fd.close
 							end
 							exit(exit_status.exitstatus)
@@ -121,7 +121,7 @@ class Pipa
 						require 'json'
 						puts ___ret = HTTPClient.get_content("#{@stages[stage][mode]}")
 						___ret_fd = IO.open(3, 'w')
-						___ret_fd.write(___ret.to_json);
+						___ret_fd.write(___ret.force_encoding('UTF-8').to_json);
 						___ret_fd.close
 					)]
 			end
